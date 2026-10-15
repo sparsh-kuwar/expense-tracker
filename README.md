@@ -1,5 +1,7 @@
 # Expense Tracker
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/sparsh-kuwar/expense-tracker)
+
 A Python (Django) web app for recording, categorising and analysing personal expenses.
 It shows monthly spending trends, a category and payment-mode breakdown, and short
 plain-language insights such as "Entertainment is up 170% this month compared with your
