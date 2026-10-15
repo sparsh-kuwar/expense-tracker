@@ -1,0 +1,28 @@
+{% extends "tracker/base.html" %}
+{% block title %}{{ title }} · Expense Tracker{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ title }}</h1>
+    <p class="muted">All fields except description are required.</p>
+  </div>
+</div>
+<form class="card form" method="post" novalidate>
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+  <div class="form-grid">
+    {% for field in form %}
+      <div class="field{% if field.name == 'description' %} wide{% endif %}{% if field.errors %} has-error{% endif %}">
+        <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.name == 'amount' %} (₹){% endif %}</label>
+        {{ field }}
+        {% for error in field.errors %}<span class="error" id="{{ field.id_for_label }}-error">{{ error }}</span>{% endfor %}
+      </div>
+    {% endfor %}
+  </div>
+  <div class="form-actions">
+    <button class="btn btn-primary" type="submit">Save expense</button>
+    {% if not expense %}<button class="btn" type="submit" name="add_another">Save and add another</button>{% endif %}
+    <a href="{% url 'expense_list' %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

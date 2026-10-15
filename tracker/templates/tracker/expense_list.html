@@ -1,0 +1,83 @@
+{% extends "tracker/base.html" %}
+{% load humanize %}
+{% block title %}Expenses · Expense Tracker{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Expenses</h1>
+    <p class="muted">Search, filter and export your spending.</p>
+  </div>
+  <a class="btn" href="{% url 'export_csv' %}{% if querystring %}?{{ querystring }}{% endif %}">
+    {% include "tracker/icon.html" with name="download" %}Export CSV
+  </a>
+</div>
+
+<form class="card filters" method="get" role="search" aria-label="Filter expenses">
+  <div class="field"><label for="{{ form.q.id_for_label }}">Search description</label>{{ form.q }}</div>
+  <div class="field"><label for="{{ form.category.id_for_label }}">Category</label>{{ form.category }}</div>
+  <div class="field">
+    <label for="{{ form.month.id_for_label }}">Month</label>{{ form.month }}
+    {% for error in form.month.errors %}<span class="error">{{ error }}</span>{% endfor %}
+  </div>
+  <div class="filters-actions">
+    <button class="btn btn-primary" type="submit">Apply</button>
+    {% if querystring %}<a href="{% url 'expense_list' %}">Clear</a>{% endif %}
+  </div>
+</form>
+
+<p class="result-meta" aria-live="polite">
+  <span>{{ count|intcomma }} expense{{ count|pluralize }}</span>
+  <span>Total <strong>₹{{ total|floatformat:2|intcomma }}</strong></span>
+</p>
+
+{% if page.object_list %}
+<div class="card table-wrap">
+<table class="table">
+  <caption class="sr-only">Expenses, newest first</caption>
+  <thead><tr>
+    <th scope="col">Date</th><th scope="col">Description</th><th scope="col">Category</th>
+    <th scope="col" class="hide-sm">Payment</th><th scope="col" class="num">Amount</th>
+    <th scope="col"><span class="sr-only">Actions</span></th>
+  </tr></thead>
+  <tbody>
+  {% for e in page.object_list %}
+    <tr>
+      <td class="num" style="text-align:left !important">{{ e.date|date:"d M Y" }}</td>
+      <td>{{ e.description|default:"—" }}</td>
+      <td><span class="tag">{{ e.get_category_display }}</span></td>
+      <td class="hide-sm">{{ e.get_payment_mode_display }}</td>
+      <td class="num">₹{{ e.amount|floatformat:2|intcomma }}</td>
+      <td>
+        <div class="actions">
+          <a class="icon-btn" href="{% url 'expense_update' e.pk %}" aria-label="Edit expense from {{ e.date|date:'d M Y' }}" title="Edit">
+            {% include "tracker/icon.html" with name="pencil" %}
+          </a>
+          <form method="post" action="{% url 'expense_delete' e.pk %}" onsubmit="return confirm('Delete this expense? This cannot be undone.');">
+            {% csrf_token %}
+            <button class="icon-btn danger" type="submit" aria-label="Delete expense from {{ e.date|date:'d M Y' }}" title="Delete">
+              {% include "tracker/icon.html" with name="trash" %}
+            </button>
+          </form>
+        </div>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% if page.has_other_pages %}
+<nav class="pager" aria-label="Pagination">
+  {% if page.has_previous %}<a class="btn btn-sm" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page.previous_page_number }}">Previous</a>{% endif %}
+  <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a class="btn btn-sm" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page.next_page_number }}">Next</a>{% endif %}
+</nav>
+{% endif %}
+{% else %}
+<div class="card empty">
+  {% include "tracker/icon.html" with name="list" cls="icon-lg" %}
+  <h2>No expenses match</h2>
+  <p>Try a different search or clear the filters.</p>
+  <a class="btn btn-primary" href="{% url 'expense_create' %}">{% include "tracker/icon.html" with name="plus" %}Add expense</a>
+</div>
+{% endif %}
+{% endblock %}

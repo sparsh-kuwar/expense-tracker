@@ -1,0 +1,145 @@
+{% extends "tracker/base.html" %}
+{% load humanize %}
+{% block title %}Dashboard · Expense Tracker{% endblock %}
+{% block head %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Dashboard</h1>
+    <p class="muted">{% now "F Y" %} overview</p>
+  </div>
+</div>
+
+{% if summary.count == 0 %}
+  <section class="card empty">
+    {% include "tracker/icon.html" with name="wallet" cls="icon-lg" %}
+    <h2>No expenses yet</h2>
+    <p>Add your first expense to see spending trends and insights here.</p>
+    <a class="btn btn-primary" href="{% url 'expense_create' %}">{% include "tracker/icon.html" with name="plus" %}Add expense</a>
+  </section>
+{% else %}
+<section class="kpis" aria-label="Summary">
+  <div class="card kpi">
+    <span class="kpi-label">Spent this month</span>
+    <span class="kpi-value">₹{{ summary.this_month|floatformat:0|intcomma }}</span>
+    {% if summary.change_pct is not None %}
+      <span class="kpi-sub">
+        <span class="delta {% if summary.change_pct > 0 %}up{% else %}down{% endif %}">
+          {% if summary.change_pct > 0 %}+{% endif %}{{ summary.change_pct|floatformat:0 }}%
+        </span>
+        vs last month
+      </span>
+    {% endif %}
+  </div>
+  <div class="card kpi">
+    <span class="kpi-label">Last month</span>
+    <span class="kpi-value">₹{{ summary.last_month|floatformat:0|intcomma }}</span>
+  </div>
+  <div class="card kpi">
+    <span class="kpi-label">Daily average</span>
+    <span class="kpi-value">₹{{ summary.daily_average|floatformat:0|intcomma }}</span>
+    <span class="kpi-sub">this month</span>
+  </div>
+  <div class="card kpi">
+    <span class="kpi-label">All time</span>
+    <span class="kpi-value">₹{{ summary.all_time|floatformat:0|intcomma }}</span>
+    <span class="kpi-sub">{{ summary.count|intcomma }} expenses</span>
+  </div>
+</section>
+
+{% if insights %}
+<section class="card" aria-labelledby="insights-h">
+  <h2 id="insights-h">Insights</h2>
+  <ul class="insights">
+    {% for note in insights %}<li>{% include "tracker/icon.html" with name="insight" %}<span>{{ note }}</span></li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<div class="grid">
+  <section class="card span-12" aria-labelledby="trend-h">
+    <div class="card-head"><h2 id="trend-h">Monthly spending</h2><span class="muted">Last 12 months</span></div>
+    <div class="chart"><canvas id="trendChart" role="img" aria-label="Bar chart of total spending per month for the last 12 months"></canvas></div>
+  </section>
+
+  <section class="card span-7" aria-labelledby="cat-h">
+    <div class="card-head"><h2 id="cat-h">Spending by category</h2><span class="muted">Last 3 months</span></div>
+    <ul class="bars">
+      {% for c in categories %}
+      <li class="bar-row">
+        <span>{{ c.label }}</span>
+        <span class="num">₹{{ c.total|floatformat:0|intcomma }}<span class="share">{% if c.share < 1 %}&lt;1{% else %}{{ c.share|floatformat:0 }}{% endif %}%</span></span>
+        <span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width: {{ c.bar|stringformat:'s' }}%"></span></span>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="card span-5" aria-labelledby="mode-h">
+    <div class="card-head"><h2 id="mode-h">By payment mode</h2><span class="muted">All time</span></div>
+    <div class="chart short"><canvas id="modeChart" role="img" aria-label="Bar chart of total spending per payment mode"></canvas></div>
+  </section>
+
+  <section class="card span-12" aria-labelledby="recent-h">
+    <div class="card-head"><h2 id="recent-h">Recent expenses</h2><a href="{% url 'expense_list' %}">View all</a></div>
+    <table class="table compact">
+      <caption class="sr-only">Five most recent expenses</caption>
+      <tbody>
+      {% for e in recent %}
+        <tr>
+          <td>{{ e.description|default:e.get_category_display }}<span class="cell-sub">{{ e.date|date:"d M Y" }} · {{ e.get_category_display }}</span></td>
+          <td class="num">₹{{ e.amount|floatformat:2|intcomma }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{{ charts|json_script:"chart-data" }}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const el = document.getElementById("chart-data");
+  if (!el || !window.Chart) return;
+  const data = JSON.parse(el.textContent);
+  const css = getComputedStyle(document.documentElement);
+  const primary = css.getPropertyValue("--primary").trim();
+  const muted = css.getPropertyValue("--text-2").trim();
+  const grid = css.getPropertyValue("--border").trim();
+  const rupee = v => "₹" + Number(v).toLocaleString("en-IN", {maximumFractionDigits: 0});
+  const compact = v => "₹" + Number(v).toLocaleString("en-IN", {notation: "compact", maximumFractionDigits: 1});
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  Chart.defaults.font.family = css.getPropertyValue("--font");
+  Chart.defaults.color = muted;
+  Chart.defaults.animation = reduce ? false : {duration: 400};
+  const tip = axis => ({
+    backgroundColor: "#0f172a", padding: 10, cornerRadius: 8, displayColors: false,
+    callbacks: {label: ctx => rupee(ctx.parsed[axis])}
+  });
+
+  // The current month is the last bar: full colour; earlier months are lighter.
+  const n = data.trend.values.length;
+  new Chart(document.getElementById("trendChart"), {
+    type: "bar",
+    data: {labels: data.trend.labels, datasets: [{
+      data: data.trend.values, borderRadius: 6, maxBarThickness: 42,
+      backgroundColor: data.trend.values.map((_, i) => i === n - 1 ? primary : primary + "55")
+    }]},
+    options: {maintainAspectRatio: false, plugins: {legend: {display: false}, tooltip: tip("y")},
+              scales: {x: {grid: {display: false}},
+                       y: {border: {display: false}, grid: {color: grid}, ticks: {callback: compact, maxTicksLimit: 5}}}}
+  });
+  new Chart(document.getElementById("modeChart"), {
+    type: "bar",
+    data: {labels: data.mode.labels, datasets: [{data: data.mode.values, backgroundColor: primary, borderRadius: 6, maxBarThickness: 28}]},
+    options: {indexAxis: "y", maintainAspectRatio: false, plugins: {legend: {display: false}, tooltip: tip("x")},
+              scales: {y: {grid: {display: false}},
+                       x: {border: {display: false}, grid: {color: grid}, ticks: {callback: compact, maxTicksLimit: 4}}}}
+  });
+});
+</script>
+{% endblock %}

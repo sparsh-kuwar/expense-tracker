@@ -1,0 +1,19 @@
+# Render Blueprint: one free web service.
+# Data is stored in SQLite by default. On Render's free plan the disk is reset on every
+# redeploy or restart, so user data is not permanent; the demo account is recreated on start.
+# For permanent data, create a PostgreSQL database and set DATABASE_URL on the service.
+services:
+  - type: web
+    name: expense-tracker
+    runtime: python
+    plan: free
+    buildCommand: ./build.sh
+    startCommand: python manage.py migrate --no-input && python manage.py seed_demo && gunicorn config.wsgi:application
+    healthCheckPath: /login/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.7
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
