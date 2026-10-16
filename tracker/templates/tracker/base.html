@@ -3,49 +3,46 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
   <title>{% block title %}Expense Tracker{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
   <link rel="stylesheet" href="{% static 'tracker/app.css' %}">
-  {% block head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="topbar">
     <div class="topbar-inner">
-      <a class="brand" href="{% url 'dashboard' %}">
-        <span class="brand-mark">{% include "tracker/icon.html" with name="wallet" %}</span>
-        Expense Tracker
-      </a>
+      <a class="wordmark" href="{% url 'dashboard' %}">expense<span>/</span>tracker</a>
       {% if user.is_authenticated %}
       {% with current=request.resolver_match.url_name %}
       <nav class="nav" aria-label="Main">
-        <a href="{% url 'dashboard' %}" aria-label="Dashboard" {% if current == 'dashboard' %}aria-current="page"{% endif %}>
-          {% include "tracker/icon.html" with name="dashboard" %}<span class="label">Dashboard</span>
+        <a href="{% url 'dashboard' %}" {% if current == 'dashboard' %}aria-current="page"{% endif %}>
+          {% include "tracker/icon.html" with name="dashboard" %}<span>Overview</span>
         </a>
-        <a href="{% url 'expense_list' %}" aria-label="Expenses" {% if current == 'expense_list' %}aria-current="page"{% endif %}>
-          {% include "tracker/icon.html" with name="list" %}<span class="label">Expenses</span>
+        <a href="{% url 'expense_list' %}" {% if current == 'expense_list' %}aria-current="page"{% endif %}>
+          {% include "tracker/icon.html" with name="list" %}<span>Expenses</span>
         </a>
-        <a class="btn-primary" href="{% url 'expense_create' %}">
-          {% include "tracker/icon.html" with name="plus" %}<span>Add expense</span>
+        <a class="nav-add" href="{% url 'expense_create' %}" {% if current == 'expense_create' %}aria-current="page"{% endif %}>
+          {% include "tracker/icon.html" with name="plus" %}<span>Add</span>
         </a>
-        <span class="user-chip">{{ user.username }}</span>
-        <form method="post" action="{% url 'logout' %}">{% csrf_token %}
-          <button class="link" type="submit" aria-label="Log out">
-            {% include "tracker/icon.html" with name="logout" %}<span class="label">Log out</span>
-          </button>
-        </form>
       </nav>
+      <div class="account">
+        <span class="account-name">{{ user.username }}</span>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+          <button class="btn-quiet" type="submit">Log out</button>
+        </form>
+      </div>
       {% endwith %}
       {% endif %}
     </div>
   </header>
   <main id="main" class="container">
     {% for message in messages %}
-      <div class="alert alert-{{ message.tags }}" role="status">
+      <div class="flash flash-{{ message.tags }}" role="status">
         {% if message.tags == "success" %}{% include "tracker/icon.html" with name="check" %}{% else %}{% include "tracker/icon.html" with name="info" %}{% endif %}
-        {{ message }}
+        <span>{{ message }}</span>
       </div>
     {% endfor %}
     {% block content %}{% endblock %}

@@ -23,7 +23,8 @@ of sample data, so every chart has something to show.
   - category share over the last 3 months
   - the category that grew most against its 3-month average
   - the largest single expense
-- **Visualisation**: Chart.js bar charts for the monthly trend and payment modes, plus ranked category bars.
+- **Visualisation**: server-rendered bar charts (day by day, 12-month trend, categories, payment split). No chart library and no JavaScript needed to read them.
+- **Interface**: quick-add on the overview, expenses grouped by day with subtotals, category chips on the form, light and dark themes, and a bottom tab bar on phones.
 - **Accounts**: Django authentication with hashed passwords. Each user sees only their own data.
 
 ## Run locally
@@ -47,7 +48,7 @@ Open http://127.0.0.1:8000.
 python manage.py test
 ```
 
-There are 24 tests. They cover the analysis functions, input validation, per-user data isolation (one user cannot edit, delete or export another user's expenses), filters, CSV export, sign-up and the demo account.
+There are 28 tests. They cover the analysis functions, input validation, per-user data isolation (one user cannot edit, delete or export another user's expenses), filters, CSV export, sign-up and the demo account.
 
 ## Deploy to Render
 
@@ -83,4 +84,4 @@ render.yaml        Render Blueprint
 
 ## Tech stack
 
-Python 3, Django 5.2, SQLite or PostgreSQL, Chart.js, WhiteNoise and Gunicorn.
+Python 3, Django 5.2, SQLite or PostgreSQL, WhiteNoise and Gunicorn.

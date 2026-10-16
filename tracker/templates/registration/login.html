@@ -1,33 +1,34 @@
 {% extends "tracker/base.html" %}
 {% block title %}Log in · Expense Tracker{% endblock %}
+{% block body_class %}auth-page{% endblock %}
 {% block content %}
 <div class="auth">
-  <section class="card">
-    <h1>Welcome back</h1>
-    <p class="muted">Log in to record and analyse your spending.</p>
-    <form method="post" class="form">
+  <section>
+    <h1>Log in</h1>
+    <form method="post" class="auth-form">
       {% csrf_token %}
-      {% if form.errors %}<div class="alert alert-error" role="alert">{% include "tracker/icon.html" with name="info" %}Wrong username or password.</div>{% endif %}
-      <div class="field"><label for="id_username">Username</label>{{ form.username }}</div>
-      <div class="field"><label for="id_password">Password</label>{{ form.password }}</div>
+      {% if form.errors %}<div class="flash flash-error" role="alert">{% include "tracker/icon.html" with name="info" %}<span>That username and password don't match.</span></div>{% endif %}
+      <div class="field">
+        <label class="field-label" for="id_username">Username</label>
+        <input type="text" name="username" id="id_username" autocomplete="username" autocapitalize="none" required autofocus value="{{ form.username.value|default:'' }}">
+      </div>
+      <div class="field">
+        <label class="field-label" for="id_password">Password</label>
+        <input type="password" name="password" id="id_password" autocomplete="current-password" required>
+      </div>
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn btn-primary full" type="submit">Log in</button>
     </form>
-    <p class="auth-foot">New here? <a href="{% url 'signup' %}">Create an account</a></p>
+    <p class="auth-foot">No account? <a href="{% url 'signup' %}">Create one</a></p>
   </section>
-  <section class="card demo" aria-labelledby="demo-h">
+
+  <form class="demo" method="post" action="{% url 'demo_login' %}">
+    {% csrf_token %}
     <div>
-      <h2 id="demo-h">Just looking?</h2>
-      <p>Open a shared demo account with 12 months of sample data.</p>
-      <ul>
-        <li>{% include "tracker/icon.html" with name="check" %}Monthly spending trends</li>
-        <li>{% include "tracker/icon.html" with name="check" %}Category and payment breakdowns</li>
-        <li>{% include "tracker/icon.html" with name="check" %}Automatic spending insights</li>
-      </ul>
+      <h2>Just looking around?</h2>
+      <p>The demo account has 12 months of sample spending, so every chart has something in it. It's shared, so don't put anything real there.</p>
     </div>
-    <form method="post" action="{% url 'demo_login' %}">{% csrf_token %}
-      <button class="btn full" type="submit">Try the demo</button>
-    </form>
-  </section>
+    <button class="btn full" type="submit">Open the demo</button>
+  </form>
 </div>
 {% endblock %}

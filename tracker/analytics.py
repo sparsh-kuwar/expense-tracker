@@ -24,6 +24,15 @@ def _total(qs) -> Decimal:
     return qs.aggregate(total=Sum("amount"))["total"] or ZERO
 
 
+def _height(value: Decimal, peak: Decimal) -> float:
+    """Bar height as a percentage of the peak value."""
+    return round(float(value / peak * 100), 1) if peak else 0.0
+
+
+def days_in_month(d: date) -> int:
+    return (month_start(d, -1) - month_start(d)).days
+
+
 def pct_change(current: Decimal, previous: Decimal):
     """Percentage change from previous to current, or None when previous is zero."""
     if not previous:
@@ -47,7 +56,32 @@ def monthly_trend(qs, today: date, months: int = 12):
             "label": m.strftime("%b %Y"),
             "total": totals.get((m.year, m.month), ZERO),
         })
+    peak = max((t["total"] for t in trend), default=ZERO)
+    for t in trend:
+        t["height"] = _height(t["total"], peak)
     return trend
+
+
+def daily_totals(qs, today: date):
+    """One entry per day of today's month, for the day-by-day strip on the dashboard."""
+    start = month_start(today)
+    rows = (
+        qs.filter(date__gte=start, date__lt=month_start(today, -1))
+        .values("date")
+        .annotate(total=Sum("amount"))
+    )
+    totals = {r["date"].day: r["total"] for r in rows}
+    peak = max(totals.values(), default=ZERO)
+    return [
+        {
+            "date": date(start.year, start.month, day),
+            "total": totals.get(day, ZERO),
+            "height": _height(totals.get(day, ZERO), peak),
+            "is_today": day == today.day,
+            "is_future": day > today.day,
+        }
+        for day in range(1, days_in_month(today) + 1)
+    ]
 
 
 def by_category(qs):
@@ -76,9 +110,15 @@ def by_category(qs):
 
 def by_payment_mode(qs):
     labels = dict(Expense.PaymentMode.choices)
-    rows = qs.values("payment_mode").annotate(total=Sum("amount")).order_by("-total")
+    rows = list(qs.values("payment_mode").annotate(total=Sum("amount")).order_by("-total"))
+    grand = sum((r["total"] for r in rows), ZERO)
     return [
-        {"label": labels.get(r["payment_mode"], r["payment_mode"]), "total": r["total"]}
+        {
+            "mode": r["payment_mode"],
+            "label": labels.get(r["payment_mode"], r["payment_mode"]),
+            "total": r["total"],
+            "share": float(r["total"] / grand * 100) if grand else 0.0,
+        }
         for r in rows
     ]
 
@@ -89,11 +129,18 @@ def summary(qs, today: date):
     last_start = month_start(today, 1)
     this_month = _total(qs.filter(date__gte=this_start, date__lte=today))
     last_month = _total(qs.filter(date__gte=last_start, date__lt=this_start))
+    # Same point in last month (day 31 maps to the last day of a shorter month).
+    same_day = last_start.replace(day=min(today.day, days_in_month(last_start)))
+    last_month_to_date = _total(qs.filter(date__gte=last_start, date__lte=same_day))
+    daily_average = this_month / today.day
     return {
         "this_month": this_month,
         "last_month": last_month,
+        "last_month_to_date": last_month_to_date,
+        "to_date_diff": this_month - last_month_to_date,
         "change_pct": pct_change(this_month, last_month),
-        "daily_average": this_month / today.day,
+        "daily_average": daily_average,
+        "projected": daily_average * days_in_month(today),
         "all_time": _total(qs),
         "count": qs.count(),
     }

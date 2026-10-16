@@ -72,6 +72,26 @@ class AnalyticsTests(TestCase):
         self.assertTrue(any("100% more" in n for n in notes))
         self.assertTrue(any("₹700.00" in n for n in notes))
 
+    def test_summary_compares_same_point_last_month(self):
+        s = analytics.summary(self.qs, self.today)
+        # Sep 20 is after Sep 15, so nothing counts "by this date" last month.
+        self.assertEqual(s["last_month_to_date"], Decimal("0"))
+        self.assertEqual(s["to_date_diff"], Decimal("1000"))
+        self.assertAlmostEqual(float(s["projected"]), 1000 / 15 * 31)
+
+    def test_same_point_clamps_to_short_month(self):
+        add(self.user, date(2026, 2, 28), "40")
+        s = analytics.summary(self.qs, date(2026, 3, 31))
+        self.assertEqual(s["last_month_to_date"], Decimal("40"))
+
+    def test_daily_totals_cover_whole_month(self):
+        days = analytics.daily_totals(self.qs, self.today)
+        self.assertEqual(len(days), 31)
+        self.assertEqual(days[9]["total"], Decimal("700"))
+        self.assertEqual(days[9]["height"], 100.0)
+        self.assertTrue(days[14]["is_today"])
+        self.assertTrue(days[20]["is_future"])
+
     def test_insights_empty_for_no_data(self):
         self.assertEqual(analytics.insights(Expense.objects.none(), self.today), [])
 
@@ -98,6 +118,13 @@ class ViewTests(TestCase):
         resp = self.client.get(reverse("dashboard"))
         self.assertContains(resp, "trendChart")
         self.assertContains(resp, "Insights")
+
+    def test_quick_add_returns_to_dashboard(self):
+        resp = self.client.post(reverse("expense_create"), {
+            "date": timezone.localdate().isoformat(), "amount": "99",
+            "category": "food", "payment_mode": "upi", "next": "dashboard",
+        })
+        self.assertRedirects(resp, reverse("dashboard"))
 
     def test_create_expense(self):
         resp = self.client.post(reverse("expense_create"), {

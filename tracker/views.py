@@ -14,27 +14,25 @@ from django.views.decorators.http import require_POST
 from . import analytics
 from .demo import ensure_demo_user
 from .forms import ExpenseForm, FilterForm, SignUpForm
+from .models import Expense
 
 
 @login_required
 def dashboard(request):
     qs = request.user.expenses.all()
     today = timezone.localdate()
-    trend = analytics.monthly_trend(qs, today)
-    categories = analytics.by_category(qs.filter(date__gte=analytics.month_start(today, 2)))
-    modes = analytics.by_payment_mode(qs)
-    charts = {
-        "trend": {"labels": [t["label"] for t in trend],
-                  "values": [float(t["total"]) for t in trend]},
-        "mode": {"labels": [m["label"] for m in modes],
-                 "values": [float(m["total"]) for m in modes]},
-    }
     return render(request, "tracker/dashboard.html", {
+        "today": today,
+        "last_month": analytics.month_start(today, 1),
         "summary": analytics.summary(qs, today),
         "insights": analytics.insights(qs, today),
-        "categories": categories,
-        "recent": qs[:5],
-        "charts": charts,
+        "daily": analytics.daily_totals(qs, today),
+        "trend": analytics.monthly_trend(qs, today),
+        "categories": analytics.by_category(qs.filter(date__gte=analytics.month_start(today, 2))),
+        "modes": analytics.by_payment_mode(qs),
+        "recent": qs[:6],
+        "category_choices": Expense.Category.choices,
+        "mode_choices": Expense.PaymentMode.choices,
     })
 
 
@@ -59,11 +57,20 @@ def _filtered(request):
 @login_required
 def expense_list(request):
     qs, form = _filtered(request)
-    page = Paginator(qs, 20).get_page(request.GET.get("page"))
+    page = Paginator(qs, 25).get_page(request.GET.get("page"))
     params = request.GET.copy()
     params.pop("page", None)
+    # Group the page's rows by day, with a subtotal for each day.
+    days = []
+    for e in page.object_list:
+        if not days or days[-1]["date"] != e.date:
+            days.append({"date": e.date, "total": 0, "items": []})
+        days[-1]["items"].append(e)
+        days[-1]["total"] += e.amount
     return render(request, "tracker/expense_list.html", {
         "page": page,
+        "days": days,
+        "filtered": bool(params),
         "form": form,
         "total": qs.aggregate(t=Sum("amount"))["t"] or 0,
         "count": qs.count(),
@@ -78,9 +85,11 @@ def expense_create(request):
         expense = form.save(commit=False)
         expense.user = request.user
         expense.save()
-        messages.success(request, "Expense added.")
+        messages.success(request, f"Added ₹{expense.amount:,.2f} · {expense.get_category_display()}.")
         if "add_another" in request.POST:
             return redirect("expense_create")
+        if request.POST.get("next") == "dashboard":
+            return redirect("dashboard")
         return redirect("expense_list")
     return render(request, "tracker/expense_form.html", {"form": form, "title": "Add expense"})
 

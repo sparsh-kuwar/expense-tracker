@@ -10,16 +10,19 @@ class ExpenseForm(forms.ModelForm):
         model = Expense
         fields = ["date", "amount", "category", "payment_mode", "description"]
         widgets = {
-            "date": forms.DateInput(attrs={"type": "date"}),
-            "amount": forms.NumberInput(attrs={"step": "0.01", "min": "0.01"}),
+            "date": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "amount": forms.NumberInput(attrs={
+                "step": "0.01", "min": "0.01", "inputmode": "decimal", "placeholder": "0.00",
+            }),
+            "category": forms.RadioSelect,
+            "payment_mode": forms.RadioSelect,
             "description": forms.TextInput(attrs={"placeholder": "e.g. Groceries at D-Mart"}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["category"].choices = [("", "Choose a category")] + list(
-            Expense.Category.choices
-        )
+        # Radio buttons, so no blank "choose one" option.
+        self.fields["category"].choices = Expense.Category.choices
 
     def clean_date(self):
         date = self.cleaned_data["date"]

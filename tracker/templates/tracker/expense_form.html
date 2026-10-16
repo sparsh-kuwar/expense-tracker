@@ -1,28 +1,96 @@
 {% extends "tracker/base.html" %}
 {% block title %}{{ title }} · Expense Tracker{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>{{ title }}</h1>
-    <p class="muted">All fields except description are required.</p>
-  </div>
-</div>
-<form class="card form" method="post" novalidate>
-  {% csrf_token %}
-  {{ form.non_field_errors }}
-  <div class="form-grid">
-    {% for field in form %}
-      <div class="field{% if field.name == 'description' %} wide{% endif %}{% if field.errors %} has-error{% endif %}">
-        <label for="{{ field.id_for_label }}">{{ field.label }}{% if field.name == 'amount' %} (₹){% endif %}</label>
-        {{ field }}
-        {% for error in field.errors %}<span class="error" id="{{ field.id_for_label }}-error">{{ error }}</span>{% endfor %}
+<div class="form-page">
+  <a class="back" href="{% url 'expense_list' %}">{% include "tracker/icon.html" with name="chevron-left" %}Expenses</a>
+  <h1>{{ title }}</h1>
+
+  <form class="card expense-form" method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="flash flash-error" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+
+    <div class="field{% if form.amount.errors %} has-error{% endif %}">
+      <label class="field-label" for="{{ form.amount.id_for_label }}">Amount</label>
+      <div class="amount-input lg">
+        <span class="cur" aria-hidden="true">₹</span>
+        <input type="number" name="amount" id="{{ form.amount.id_for_label }}" step="0.01" min="0.01" inputmode="decimal" placeholder="0"
+               value="{{ form.amount.value|default_if_none:'' }}" {% if not expense %}autofocus{% endif %}
+               {% if form.amount.errors %}aria-invalid="true" aria-describedby="amount-error"{% endif %}>
       </div>
-    {% endfor %}
-  </div>
-  <div class="form-actions">
-    <button class="btn btn-primary" type="submit">Save expense</button>
-    {% if not expense %}<button class="btn" type="submit" name="add_another">Save and add another</button>{% endif %}
-    <a href="{% url 'expense_list' %}">Cancel</a>
-  </div>
-</form>
+      {% for error in form.amount.errors %}<span class="error" id="amount-error">{{ error }}</span>{% endfor %}
+    </div>
+
+    <div class="field{% if form.description.errors %} has-error{% endif %}">
+      <label class="field-label" for="{{ form.description.id_for_label }}">Description <span class="optional">optional</span></label>
+      {{ form.description }}
+      {% for error in form.description.errors %}<span class="error">{{ error }}</span>{% endfor %}
+    </div>
+
+    <fieldset class="field{% if form.category.errors %} has-error{% endif %}">
+      <legend class="field-label">Category</legend>
+      <div class="chips">
+        {% for radio in form.category %}
+        <label class="chip" data-cat="{{ radio.data.value }}">{{ radio.tag }}<span class="swatch" aria-hidden="true"></span>{{ radio.choice_label }}</label>
+        {% endfor %}
+      </div>
+      {% for error in form.category.errors %}<span class="error">{{ error }}</span>{% endfor %}
+    </fieldset>
+
+    <div class="field-pair">
+      <fieldset class="field{% if form.payment_mode.errors %} has-error{% endif %}">
+        <legend class="field-label">Paid with</legend>
+        <div class="segmented">
+          {% for radio in form.payment_mode %}
+          <label>{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>
+          {% endfor %}
+        </div>
+        {% for error in form.payment_mode.errors %}<span class="error">{{ error }}</span>{% endfor %}
+      </fieldset>
+
+      <div class="field{% if form.date.errors %} has-error{% endif %}">
+        <label class="field-label" for="{{ form.date.id_for_label }}">Date</label>
+        {{ form.date }}
+        <div class="date-shortcuts" hidden>
+          <button type="button" class="btn-quiet" data-days-ago="0">Today</button>
+          <button type="button" class="btn-quiet" data-days-ago="1">Yesterday</button>
+        </div>
+        {% for error in form.date.errors %}<span class="error">{{ error }}</span>{% endfor %}
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button class="btn btn-primary" type="submit">{% if expense %}Save changes{% else %}Save expense{% endif %}</button>
+      {% if not expense %}<button class="btn" type="submit" name="add_another">Save and add another</button>{% endif %}
+      <a class="btn-quiet" href="{% url 'expense_list' %}">Cancel</a>
+    </div>
+  </form>
+
+  {% if expense %}
+  <form class="danger-zone" method="post" action="{% url 'expense_delete' expense.pk %}" data-confirm="Delete this expense? This cannot be undone.">
+    {% csrf_token %}
+    <button class="btn-quiet danger" type="submit">{% include "tracker/icon.html" with name="trash" %}Delete this expense</button>
+  </form>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const dateInput = document.getElementById("{{ form.date.id_for_label }}");
+  const shortcuts = document.querySelector(".date-shortcuts");
+  if (dateInput && shortcuts) {
+    shortcuts.hidden = false;
+    const iso = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    shortcuts.addEventListener("click", e => {
+      const btn = e.target.closest("[data-days-ago]");
+      if (!btn) return;
+      const d = new Date();
+      d.setDate(d.getDate() - Number(btn.dataset.daysAgo));
+      dateInput.value = iso(d);
+    });
+    dateInput.max = iso(new Date());
+  }
+  document.querySelectorAll("form[data-confirm]").forEach(f =>
+    f.addEventListener("submit", e => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));
+</script>
 {% endblock %}

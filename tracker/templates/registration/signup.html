@@ -1,23 +1,23 @@
 {% extends "tracker/base.html" %}
 {% block title %}Sign up · Expense Tracker{% endblock %}
+{% block body_class %}auth-page{% endblock %}
 {% block content %}
-<div class="auth" style="grid-template-columns: minmax(0, 480px); justify-content: center;">
-  <section class="card">
+<div class="auth single">
+  <section>
     <h1>Create an account</h1>
-    <p class="muted">Start tracking your expenses in under a minute.</p>
-    <form method="post" class="form" novalidate>
+    <form method="post" class="auth-form" novalidate>
       {% csrf_token %}
       {% for field in form %}
         <div class="field{% if field.errors %} has-error{% endif %}">
-          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          <label class="field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
           {{ field }}
-          {% if field.help_text %}<div class="helptext">{{ field.help_text|safe }}</div>{% endif %}
           {% for error in field.errors %}<span class="error">{{ error }}</span>{% endfor %}
+          {% if field.help_text and not field.errors %}<div class="helptext">{{ field.help_text|safe }}</div>{% endif %}
         </div>
       {% endfor %}
-      <button class="btn btn-primary full" type="submit">Sign up</button>
+      <button class="btn btn-primary full" type="submit">Create account</button>
     </form>
-    <p class="auth-foot">Already have an account? <a href="{% url 'login' %}">Log in</a></p>
+    <p class="auth-foot">Already have one? <a href="{% url 'login' %}">Log in</a></p>
   </section>
 </div>
 {% endblock %}

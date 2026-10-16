@@ -1,145 +1,169 @@
 {% extends "tracker/base.html" %}
 {% load humanize %}
-{% block title %}Dashboard · Expense Tracker{% endblock %}
-{% block head %}<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>{% endblock %}
+{% block title %}Overview · Expense Tracker{% endblock %}
 {% block content %}
-<div class="page-head">
-  <div>
-    <h1>Dashboard</h1>
-    <p class="muted">{% now "F Y" %} overview</p>
-  </div>
+
+<div class="overview-top">
+  {% if summary.count == 0 %}
+  <section class="hero hero-empty">
+    <p class="eyebrow">{{ today|date:"F Y" }}</p>
+    <h1>No expenses yet</h1>
+    <p class="lede">Log what you spend as it happens. Once there are a few entries, this page shows where the money goes, how this month compares with last, and which categories are creeping up.</p>
+  </section>
+  {% else %}
+  <section class="hero" aria-labelledby="hero-h">
+    <p class="eyebrow">{{ today|date:"F Y" }} <span class="dot">·</span> day {{ today.day }} of {{ daily|length }}</p>
+    <h1 id="hero-h" class="hero-figure"><span class="sr-only">Spent this month: </span><span class="cur">₹</span>{{ summary.this_month|floatformat:0|intcomma }}</h1>
+    <p class="hero-compare">
+      {% if summary.last_month_to_date %}
+        {% if summary.to_date_diff > 0 %}
+          <span class="delta up">₹{{ summary.to_date_diff|floatformat:0|intcomma }} more</span>
+        {% elif summary.to_date_diff < 0 %}
+          <span class="delta down">₹{{ summary.to_date_diff|floatformat:0|intcomma|cut:"-" }} less</span>
+        {% else %}
+          <span class="delta">Exactly the same</span>
+        {% endif %}
+        than by this date in {{ last_month|date:"F" }}
+      {% else %}
+        Nothing recorded for {{ last_month|date:"F" }} to compare against.
+      {% endif %}
+    </p>
+    <dl class="hero-stats">
+      <div><dt>Daily average</dt><dd>₹{{ summary.daily_average|floatformat:0|intcomma }}</dd></div>
+      <div><dt>On pace for</dt><dd>₹{{ summary.projected|floatformat:0|intcomma }}</dd></div>
+      <div><dt>{{ last_month|date:"F" }} total</dt><dd>₹{{ summary.last_month|floatformat:0|intcomma }}</dd></div>
+    </dl>
+  </section>
+  {% endif %}
+
+  <form class="card quick-add" method="post" action="{% url 'expense_create' %}" aria-labelledby="quick-h">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="dashboard">
+    <h2 id="quick-h">Add an expense</h2>
+    <label class="amount-input">
+      <span class="sr-only">Amount in rupees</span>
+      <span class="cur" aria-hidden="true">₹</span>
+      <input name="amount" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="0" required {% if summary.count == 0 %}autofocus{% endif %}>
+    </label>
+    <label class="field">
+      <span class="field-label">Description</span>
+      <input name="description" maxlength="200" placeholder="What was it for?">
+    </label>
+    <div class="field-pair">
+      <label class="field">
+        <span class="field-label">Category</span>
+        <select name="category" required>
+          <option value="" disabled selected>Choose…</option>
+          {% for value, label in category_choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field">
+        <span class="field-label">Paid with</span>
+        <select name="payment_mode">
+          {% for value, label in mode_choices %}<option value="{{ value }}" {% if value == "upi" %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="quick-foot">
+      <label class="field">
+        <span class="field-label">Date</span>
+        <input name="date" type="date" value="{{ today|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" required>
+      </label>
+      <button class="btn btn-primary" type="submit">Add</button>
+    </div>
+  </form>
 </div>
 
-{% if summary.count == 0 %}
-  <section class="card empty">
-    {% include "tracker/icon.html" with name="wallet" cls="icon-lg" %}
-    <h2>No expenses yet</h2>
-    <p>Add your first expense to see spending trends and insights here.</p>
-    <a class="btn btn-primary" href="{% url 'expense_create' %}">{% include "tracker/icon.html" with name="plus" %}Add expense</a>
-  </section>
-{% else %}
-<section class="kpis" aria-label="Summary">
-  <div class="card kpi">
-    <span class="kpi-label">Spent this month</span>
-    <span class="kpi-value">₹{{ summary.this_month|floatformat:0|intcomma }}</span>
-    {% if summary.change_pct is not None %}
-      <span class="kpi-sub">
-        <span class="delta {% if summary.change_pct > 0 %}up{% else %}down{% endif %}">
-          {% if summary.change_pct > 0 %}+{% endif %}{{ summary.change_pct|floatformat:0 }}%
-        </span>
-        vs last month
-      </span>
-    {% endif %}
+{% if summary.count %}
+<section class="card" aria-labelledby="daily-h">
+  <div class="card-head">
+    <h2 id="daily-h">Day by day</h2>
+    <span class="muted hint-hover">Hover a bar for the amount</span>
   </div>
-  <div class="card kpi">
-    <span class="kpi-label">Last month</span>
-    <span class="kpi-value">₹{{ summary.last_month|floatformat:0|intcomma }}</span>
-  </div>
-  <div class="card kpi">
-    <span class="kpi-label">Daily average</span>
-    <span class="kpi-value">₹{{ summary.daily_average|floatformat:0|intcomma }}</span>
-    <span class="kpi-sub">this month</span>
-  </div>
-  <div class="card kpi">
-    <span class="kpi-label">All time</span>
-    <span class="kpi-value">₹{{ summary.all_time|floatformat:0|intcomma }}</span>
-    <span class="kpi-sub">{{ summary.count|intcomma }} expenses</span>
-  </div>
+  <ol class="days">
+    {% for d in daily %}
+    <li class="day{% if d.is_today %} is-today{% endif %}{% if d.is_future %} is-future{% endif %}"
+        {% if not d.is_future %}tabindex="0" data-tip="{{ d.date|date:'D j M' }} · ₹{{ d.total|floatformat:0|intcomma }}"{% endif %}>
+      <span class="day-bar" style="--h: {{ d.height|stringformat:'s' }}%"></span>
+      <span class="day-num{% if d.is_today or d.date.day == 1 or d.date.day|divisibleby:5 %} shown{% endif %}" aria-hidden="true">{{ d.date.day }}</span>
+      <span class="sr-only">{{ d.date|date:"j F" }}: ₹{{ d.total|floatformat:0|intcomma }}</span>
+    </li>
+    {% endfor %}
+  </ol>
 </section>
-
-{% if insights %}
-<section class="card" aria-labelledby="insights-h">
-  <h2 id="insights-h">Insights</h2>
-  <ul class="insights">
-    {% for note in insights %}<li>{% include "tracker/icon.html" with name="insight" %}<span>{{ note }}</span></li>{% endfor %}
-  </ul>
-</section>
-{% endif %}
 
 <div class="grid">
-  <section class="card span-12" aria-labelledby="trend-h">
-    <div class="card-head"><h2 id="trend-h">Monthly spending</h2><span class="muted">Last 12 months</span></div>
-    <div class="chart"><canvas id="trendChart" role="img" aria-label="Bar chart of total spending per month for the last 12 months"></canvas></div>
+  <section class="card span-7" aria-labelledby="cat-h">
+    <div class="card-head"><h2 id="cat-h">Where it went</h2><span class="muted">Last 3 months</span></div>
+    <ul class="cats">
+      {% for c in categories %}
+      <li>
+        <a class="cat-row" data-cat="{{ c.category }}" href="{% url 'expense_list' %}?category={{ c.category }}">
+          <span class="cat-name"><span class="swatch" aria-hidden="true"></span>{{ c.label }}</span>
+          <span class="cat-amount num">₹{{ c.total|floatformat:0|intcomma }}</span>
+          <span class="cat-share num">{% if c.share < 1 %}&lt;1{% else %}{{ c.share|floatformat:0 }}{% endif %}%</span>
+          <span class="cat-track" aria-hidden="true"><span style="width: {{ c.bar|stringformat:'s' }}%"></span></span>
+        </a>
+      </li>
+      {% empty %}
+      <li class="muted">Nothing in the last 3 months.</li>
+      {% endfor %}
+    </ul>
   </section>
 
-  <section class="card span-7" aria-labelledby="cat-h">
-    <div class="card-head"><h2 id="cat-h">Spending by category</h2><span class="muted">Last 3 months</span></div>
-    <ul class="bars">
-      {% for c in categories %}
-      <li class="bar-row">
-        <span>{{ c.label }}</span>
-        <span class="num">₹{{ c.total|floatformat:0|intcomma }}<span class="share">{% if c.share < 1 %}&lt;1{% else %}{{ c.share|floatformat:0 }}{% endif %}%</span></span>
-        <span class="bar-track" aria-hidden="true"><span class="bar-fill" style="width: {{ c.bar|stringformat:'s' }}%"></span></span>
+  <section class="card span-5" aria-labelledby="recent-h">
+    <div class="card-head"><h2 id="recent-h">Latest</h2><a href="{% url 'expense_list' %}">All expenses</a></div>
+    <ul class="ledger compact">
+      {% for e in recent %}
+      <li>
+        <a class="entry" href="{% url 'expense_update' e.pk %}" data-cat="{{ e.category }}">
+          <span class="swatch" aria-hidden="true"></span>
+          <span class="entry-main">
+            <span class="entry-title">{{ e.description|default:e.get_category_display }}</span>
+            <span class="entry-meta">{% if e.date == today %}Today{% else %}{{ e.date|date:"j M" }}{% endif %} · {{ e.get_category_display }}</span>
+          </span>
+          <span class="entry-amount num">₹{{ e.amount|floatformat:2|intcomma }}</span>
+        </a>
       </li>
       {% endfor %}
     </ul>
   </section>
 
-  <section class="card span-5" aria-labelledby="mode-h">
-    <div class="card-head"><h2 id="mode-h">By payment mode</h2><span class="muted">All time</span></div>
-    <div class="chart short"><canvas id="modeChart" role="img" aria-label="Bar chart of total spending per payment mode"></canvas></div>
-  </section>
-
-  <section class="card span-12" aria-labelledby="recent-h">
-    <div class="card-head"><h2 id="recent-h">Recent expenses</h2><a href="{% url 'expense_list' %}">View all</a></div>
-    <table class="table compact">
-      <caption class="sr-only">Five most recent expenses</caption>
-      <tbody>
-      {% for e in recent %}
-        <tr>
-          <td>{{ e.description|default:e.get_category_display }}<span class="cell-sub">{{ e.date|date:"d M Y" }} · {{ e.get_category_display }}</span></td>
-          <td class="num">₹{{ e.amount|floatformat:2|intcomma }}</td>
-        </tr>
+  <section class="card span-7" aria-labelledby="trend-h">
+    <div class="card-head"><h2 id="trend-h">Monthly totals</h2><span class="muted">Last 12 months</span></div>
+    <ol class="months" id="trendChart">
+      {% for t in trend %}
+      <li class="month{% if forloop.last %} is-current{% endif %}" tabindex="0" data-tip="{{ t.label }} · ₹{{ t.total|floatformat:0|intcomma }}">
+        <span class="month-bar" style="--h: {{ t.height|stringformat:'s' }}%"></span>
+        <span class="month-label" aria-hidden="true">{{ t.label|slice:":3" }}</span>
+        <span class="sr-only">{{ t.label }}: ₹{{ t.total|floatformat:0|intcomma }}</span>
+      </li>
       {% endfor %}
-      </tbody>
-    </table>
+    </ol>
   </section>
+
+  <div class="span-5 stack">
+    <section class="card" aria-labelledby="mode-h">
+      <div class="card-head"><h2 id="mode-h">Paid with</h2><span class="muted">All time</span></div>
+      <div class="split-bar" aria-hidden="true">
+        {% for m in modes %}<span data-mode="{{ m.mode }}" style="flex-grow: {{ m.share|stringformat:'s' }}"></span>{% endfor %}
+      </div>
+      <ul class="split-legend">
+        {% for m in modes %}
+        <li data-mode="{{ m.mode }}"><span class="swatch" aria-hidden="true"></span>{{ m.label }}<span class="num">{{ m.share|floatformat:0 }}%</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    {% if insights %}
+    <section class="card" aria-labelledby="insights-h">
+      <div class="card-head"><h2 id="insights-h">Insights</h2></div>
+      <ol class="notes">
+        {% for note in insights %}<li>{{ note }}</li>{% endfor %}
+      </ol>
+    </section>
+    {% endif %}
+  </div>
 </div>
-{{ charts|json_script:"chart-data" }}
 {% endif %}
-{% endblock %}
-
-{% block scripts %}
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-  const el = document.getElementById("chart-data");
-  if (!el || !window.Chart) return;
-  const data = JSON.parse(el.textContent);
-  const css = getComputedStyle(document.documentElement);
-  const primary = css.getPropertyValue("--primary").trim();
-  const muted = css.getPropertyValue("--text-2").trim();
-  const grid = css.getPropertyValue("--border").trim();
-  const rupee = v => "₹" + Number(v).toLocaleString("en-IN", {maximumFractionDigits: 0});
-  const compact = v => "₹" + Number(v).toLocaleString("en-IN", {notation: "compact", maximumFractionDigits: 1});
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-  Chart.defaults.font.family = css.getPropertyValue("--font");
-  Chart.defaults.color = muted;
-  Chart.defaults.animation = reduce ? false : {duration: 400};
-  const tip = axis => ({
-    backgroundColor: "#0f172a", padding: 10, cornerRadius: 8, displayColors: false,
-    callbacks: {label: ctx => rupee(ctx.parsed[axis])}
-  });
-
-  // The current month is the last bar: full colour; earlier months are lighter.
-  const n = data.trend.values.length;
-  new Chart(document.getElementById("trendChart"), {
-    type: "bar",
-    data: {labels: data.trend.labels, datasets: [{
-      data: data.trend.values, borderRadius: 6, maxBarThickness: 42,
-      backgroundColor: data.trend.values.map((_, i) => i === n - 1 ? primary : primary + "55")
-    }]},
-    options: {maintainAspectRatio: false, plugins: {legend: {display: false}, tooltip: tip("y")},
-              scales: {x: {grid: {display: false}},
-                       y: {border: {display: false}, grid: {color: grid}, ticks: {callback: compact, maxTicksLimit: 5}}}}
-  });
-  new Chart(document.getElementById("modeChart"), {
-    type: "bar",
-    data: {labels: data.mode.labels, datasets: [{data: data.mode.values, backgroundColor: primary, borderRadius: 6, maxBarThickness: 28}]},
-    options: {indexAxis: "y", maintainAspectRatio: false, plugins: {legend: {display: false}, tooltip: tip("x")},
-              scales: {y: {grid: {display: false}},
-                       x: {border: {display: false}, grid: {color: grid}, ticks: {callback: compact, maxTicksLimit: 4}}}}
-  });
-});
-</script>
 {% endblock %}

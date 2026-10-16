@@ -5,79 +5,96 @@
 <div class="page-head">
   <div>
     <h1>Expenses</h1>
-    <p class="muted">Search, filter and export your spending.</p>
+    <p class="result-meta" aria-live="polite">
+      {{ count|intcomma }} expense{{ count|pluralize }}{% if filtered %} match{% if count == 1 %}es{% endif %}{% endif %}
+      <span class="dot">·</span> <strong class="num">₹{{ total|floatformat:2|intcomma }}</strong>
+    </p>
   </div>
   <a class="btn" href="{% url 'export_csv' %}{% if querystring %}?{{ querystring }}{% endif %}">
     {% include "tracker/icon.html" with name="download" %}Export CSV
   </a>
 </div>
 
-<form class="card filters" method="get" role="search" aria-label="Filter expenses">
-  <div class="field"><label for="{{ form.q.id_for_label }}">Search description</label>{{ form.q }}</div>
-  <div class="field"><label for="{{ form.category.id_for_label }}">Category</label>{{ form.category }}</div>
-  <div class="field">
-    <label for="{{ form.month.id_for_label }}">Month</label>{{ form.month }}
-    {% for error in form.month.errors %}<span class="error">{{ error }}</span>{% endfor %}
-  </div>
-  <div class="filters-actions">
-    <button class="btn btn-primary" type="submit">Apply</button>
-    {% if querystring %}<a href="{% url 'expense_list' %}">Clear</a>{% endif %}
-  </div>
+<form class="toolbar" method="get" role="search" aria-label="Filter expenses" data-autosubmit>
+  <label class="search">
+    {% include "tracker/icon.html" with name="search" %}
+    <span class="sr-only">Search descriptions</span>
+    <input type="search" name="q" value="{{ form.q.value|default:'' }}" placeholder="Search descriptions">
+  </label>
+  <label>
+    <span class="sr-only">Category</span>
+    {{ form.category }}
+  </label>
+  <label>
+    <span class="sr-only">Month</span>
+    {{ form.month }}
+  </label>
+  <button class="btn" type="submit">Apply</button>
+  {% if filtered %}<a class="btn-quiet" href="{% url 'expense_list' %}">{% include "tracker/icon.html" with name="x" %}Clear</a>{% endif %}
 </form>
+{% for error in form.month.errors %}<p class="error">{{ error }}</p>{% endfor %}
 
-<p class="result-meta" aria-live="polite">
-  <span>{{ count|intcomma }} expense{{ count|pluralize }}</span>
-  <span>Total <strong>₹{{ total|floatformat:2|intcomma }}</strong></span>
-</p>
-
-{% if page.object_list %}
-<div class="card table-wrap">
-<table class="table">
-  <caption class="sr-only">Expenses, newest first</caption>
-  <thead><tr>
-    <th scope="col">Date</th><th scope="col">Description</th><th scope="col">Category</th>
-    <th scope="col" class="hide-sm">Payment</th><th scope="col" class="num">Amount</th>
-    <th scope="col"><span class="sr-only">Actions</span></th>
-  </tr></thead>
-  <tbody>
-  {% for e in page.object_list %}
-    <tr>
-      <td class="num" style="text-align:left !important">{{ e.date|date:"d M Y" }}</td>
-      <td>{{ e.description|default:"—" }}</td>
-      <td><span class="tag">{{ e.get_category_display }}</span></td>
-      <td class="hide-sm">{{ e.get_payment_mode_display }}</td>
-      <td class="num">₹{{ e.amount|floatformat:2|intcomma }}</td>
-      <td>
-        <div class="actions">
-          <a class="icon-btn" href="{% url 'expense_update' e.pk %}" aria-label="Edit expense from {{ e.date|date:'d M Y' }}" title="Edit">
-            {% include "tracker/icon.html" with name="pencil" %}
-          </a>
-          <form method="post" action="{% url 'expense_delete' e.pk %}" onsubmit="return confirm('Delete this expense? This cannot be undone.');">
-            {% csrf_token %}
-            <button class="icon-btn danger" type="submit" aria-label="Delete expense from {{ e.date|date:'d M Y' }}" title="Delete">
-              {% include "tracker/icon.html" with name="trash" %}
-            </button>
-          </form>
-        </div>
-      </td>
-    </tr>
+{% if days %}
+{% now "Y" as this_year %}
+<div class="card ledger-card">
+  {% for day in days %}
+  <section class="day-group" aria-label="{{ day.date|date:'l j F Y' }}">
+    <header class="day-head">
+      <h2>{{ day.date|naturalday:"l, j M"|capfirst }}{% if day.date.year|stringformat:"d" != this_year %} {{ day.date.year }}{% endif %}</h2>
+      <span class="num">₹{{ day.total|floatformat:2|intcomma }}</span>
+    </header>
+    <ul class="ledger">
+      {% for e in day.items %}
+      <li class="entry-row">
+        <a class="entry" href="{% url 'expense_update' e.pk %}" data-cat="{{ e.category }}">
+          <span class="swatch" aria-hidden="true"></span>
+          <span class="entry-main">
+            <span class="entry-title">{{ e.description|default:e.get_category_display }}</span>
+            <span class="entry-meta">{{ e.get_category_display }} · {{ e.get_payment_mode_display }}</span>
+          </span>
+          <span class="entry-amount num">₹{{ e.amount|floatformat:2|intcomma }}</span>
+        </a>
+        <form method="post" action="{% url 'expense_delete' e.pk %}" data-confirm="Delete “{{ e.description|default:e.get_category_display }}” (₹{{ e.amount|floatformat:2|intcomma }})? This cannot be undone.">
+          {% csrf_token %}
+          <button class="icon-btn danger" type="submit" aria-label="Delete {{ e.description|default:e.get_category_display }}, {{ e.date|date:'j M' }}" title="Delete">
+            {% include "tracker/icon.html" with name="trash" %}
+          </button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
   {% endfor %}
-  </tbody>
-</table>
 </div>
+
 {% if page.has_other_pages %}
 <nav class="pager" aria-label="Pagination">
-  {% if page.has_previous %}<a class="btn btn-sm" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page.previous_page_number }}">Previous</a>{% endif %}
-  <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
-  {% if page.has_next %}<a class="btn btn-sm" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page.next_page_number }}">Next</a>{% endif %}
+  {% if page.has_previous %}<a class="btn" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page.previous_page_number }}">{% include "tracker/icon.html" with name="chevron-left" %}Newer</a>{% else %}<span></span>{% endif %}
+  <span class="muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  {% if page.has_next %}<a class="btn" href="?{% if querystring %}{{ querystring }}&{% endif %}page={{ page.next_page_number }}">Older{% include "tracker/icon.html" with name="chevron-right" %}</a>{% else %}<span></span>{% endif %}
 </nav>
 {% endif %}
+
+{% elif filtered %}
+<div class="empty">
+  <h2>Nothing matches those filters</h2>
+  <p>Try a broader search, or <a href="{% url 'expense_list' %}">clear all filters</a>.</p>
+</div>
 {% else %}
-<div class="card empty">
-  {% include "tracker/icon.html" with name="list" cls="icon-lg" %}
-  <h2>No expenses match</h2>
-  <p>Try a different search or clear the filters.</p>
+<div class="empty">
+  <h2>No expenses yet</h2>
+  <p>Your first entry takes about five seconds.</p>
   <a class="btn btn-primary" href="{% url 'expense_create' %}">{% include "tracker/icon.html" with name="plus" %}Add expense</a>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Filters apply as soon as a select or month changes; search applies on Enter.
+  document.querySelectorAll("[data-autosubmit] select, [data-autosubmit] input[type=month]").forEach(el =>
+    el.addEventListener("change", () => el.form.requestSubmit()));
+  document.querySelectorAll("form[data-confirm]").forEach(f =>
+    f.addEventListener("submit", e => { if (!confirm(f.dataset.confirm)) e.preventDefault(); }));
+</script>
 {% endblock %}
